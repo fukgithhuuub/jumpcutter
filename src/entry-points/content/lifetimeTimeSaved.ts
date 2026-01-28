@@ -124,6 +124,8 @@ export default function startTrackingLifetimeTimeSaved(
       return;
     }
 
+    const lifetimeSaved = getLifetimeTimeSaved(timeSavedInCurrSession);
+
     // Sanity checks. Don't save to storage if the value is insane,
     // in order to not permanently mess up the stored value.
     // Note that the value might be insane at first, but then normalize,
@@ -133,16 +135,18 @@ export default function startTrackingLifetimeTimeSaved(
     // but I have basically never seen the "time saved" values being too insane.
     // On top of that, maybe messing up the values is not that bad,
     // as long as we rotate them, say, every month.
-    if (!isSessionTimeSavedSane(timeSavedInCurrSession, startedTrackingAtMs)) {
+    if (
+      !isSessionTimeSavedSane(timeSavedInCurrSession, startedTrackingAtMs) ||
+      !isLifetimeSavedSane(lifetimeSaved)
+    ) {
       console.warn(
         "Total time saved doesn't look sane, will not store it to persistent storage",
         timeSavedInCurrSession,
-        startedTrackingAtMs
+        startedTrackingAtMs,
+        lifetimeSaved
       );
       return;
     }
-
-    const lifetimeSaved = getLifetimeTimeSaved(timeSavedInCurrSession);
 
     setSettings_({
       lifetimeTimeSavedComparedToIntrinsicSpeed:
@@ -187,11 +191,14 @@ function isSessionTimeSavedSane(
   saved: TimeSavedTracker["timeSavedData"],
   startedTrackingAtMs: number
 ): boolean {
+  // Also be sure to handle NaN.
+  // That is why we use `!(n <= 0.95)` instead of `n > 0.95`.
+
   const timeSavedComparedtoSoundedFraction =
     getTimeSavedComparedToSoundedSpeedFraction(saved);
   if (
-    timeSavedComparedtoSoundedFraction > 0.95 ||
-    timeSavedComparedtoSoundedFraction < -0.5
+    !(timeSavedComparedtoSoundedFraction <= 0.95) ||
+    !(timeSavedComparedtoSoundedFraction >= -0.5)
   ) {
     return false;
   }
@@ -202,8 +209,8 @@ function isSessionTimeSavedSane(
     // than for sounded speed, because the fraction is greater
     // when the sounded speed is high, and is lower, even negative,
     // when the sounded speed is < 1.
-    timeSavedComparedtoIntrinsicFraction > 0.99 ||
-    timeSavedComparedtoIntrinsicFraction < -10
+    !(timeSavedComparedtoIntrinsicFraction <= 0.99) ||
+    !(timeSavedComparedtoIntrinsicFraction >= -10)
   ) {
     return false;
   }
@@ -212,8 +219,8 @@ function isSessionTimeSavedSane(
     saved.wouldHaveLastedIfSpeedWasIntrinsic /
     saved.wouldHaveLastedIfSpeedWasSounded;
   if (
-    calculatedAverageSoundedSpeed > 16 ||
-    calculatedAverageSoundedSpeed < 0.125
+    !(calculatedAverageSoundedSpeed <= 16) ||
+    !(calculatedAverageSoundedSpeed >= 0.125)
   ) {
     return false;
   }
@@ -224,15 +231,17 @@ function isSessionTimeSavedSane(
       saved.timeSavedComparedToSoundedSpeed);
   const realTimePassedSinceStartedTrackingMs = Date.now() - startedTrackingAtMs;
   // It says that playback lasts much longer than what has really passed.
-  if (realtimePlaybackDurationMs > realTimePassedSinceStartedTrackingMs * 2) {
+  if (
+    !(realtimePlaybackDurationMs <= realTimePassedSinceStartedTrackingMs * 2)
+  ) {
     return false;
   }
 
   if (
-    saved.timeSavedComparedToSoundedSpeed < -1 * 60 * 60 * 24 ||
-    saved.timeSavedComparedToSoundedSpeed > 60 * 60 * 24 * 365 ||
-    saved.timeSavedComparedToIntrinsicSpeed < -1 * 60 * 60 * 24 ||
-    saved.timeSavedComparedToIntrinsicSpeed > 60 * 60 * 24 * 365
+    !(saved.timeSavedComparedToSoundedSpeed >= -1 * 60 * 60 * 24) ||
+    !(saved.timeSavedComparedToSoundedSpeed <= 60 * 60 * 24 * 365) ||
+    !(saved.timeSavedComparedToIntrinsicSpeed >= -1 * 60 * 60 * 24) ||
+    !(saved.timeSavedComparedToIntrinsicSpeed <= 60 * 60 * 24 * 365)
   ) {
     return false;
   }
@@ -242,4 +251,14 @@ function isSessionTimeSavedSane(
   // Is it even possible to determine though based on the 4 values we are given?
 
   return true;
+}
+function isLifetimeSavedSane(
+  lifetimeSaved: TimeSavedTracker["timeSavedData"]
+) {
+  return (
+    Number.isFinite(lifetimeSaved.timeSavedComparedToIntrinsicSpeed) &&
+    Number.isFinite(lifetimeSaved.timeSavedComparedToSoundedSpeed) &&
+    Number.isFinite(lifetimeSaved.wouldHaveLastedIfSpeedWasIntrinsic) &&
+    Number.isFinite(lifetimeSaved.wouldHaveLastedIfSpeedWasSounded)
+  );
 }
