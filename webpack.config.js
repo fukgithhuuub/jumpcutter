@@ -257,6 +257,19 @@ function injectBrowserSpecificManifestFields(manifest, browser) {
     manifest.browser_specific_settings = {
       gecko: {
         id: "jump-cutter@example.com",
+        // https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/
+        // https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/
+        // We do store settings and "time saved" data on the user's device,
+        // which would be `technicalAndInteraction`,
+        // but from reading the article I am getting a feeling
+        // that this does not count as "data collection".
+        // For example, when you add an optional `technicalAndInteraction`',
+        // the user will be prompted with a checkbox
+        // > Share technical and interaction data with extension developer
+        // And I'd say it's clearly not applicable to us.
+        data_collection_permissions: {
+          required: ["none"]
+        },
         // At least "91.0a1" is required due to this bug:
         // https://bugzilla.mozilla.org/show_bug.cgi?id=1517199
         // "109" is required due to Manifest V3 migration:
